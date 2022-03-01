@@ -6,6 +6,8 @@ import java.util.Iterator;
 
 import com.google.gwt.core.client.EntryPoint;
 import com.google.gwt.core.client.GWT;
+import com.google.gwt.core.client.JsArray;
+import com.google.gwt.core.client.JsonUtils;
 import com.google.gwt.event.dom.client.ClickEvent;
 import com.google.gwt.event.dom.client.ClickHandler;
 import com.google.gwt.event.dom.client.KeyCodes;
@@ -21,6 +23,11 @@ import com.google.gwt.user.client.ui.Button;
 import com.google.gwt.user.client.ui.FlexTable;
 import com.google.gwt.user.client.ui.HorizontalPanel;
 import com.google.gwt.user.client.ui.Label;
+import com.google.gwt.http.client.Request;
+import com.google.gwt.http.client.RequestBuilder;
+import com.google.gwt.http.client.RequestCallback;
+import com.google.gwt.http.client.RequestException;
+import com.google.gwt.http.client.Response;
 import com.google.gwt.user.client.ui.RootPanel;
 import com.google.gwt.user.client.ui.TextBox;
 import com.google.gwt.user.client.ui.VerticalPanel;
@@ -35,6 +42,7 @@ public class StockWatcher implements EntryPoint {
   private Button addStockButton = new Button("Add");
   private Label lastUpdatedLabel = new Label();
   private ArrayList<String> stocks = new ArrayList<String>();
+  private Label errorMsgLabel = new Label();
 
   /**
    * Entry point method.
@@ -60,6 +68,10 @@ public class StockWatcher implements EntryPoint {
     addPanel.addStyleName("addPanel");
 
     // Assemble Main panel.
+    errorMsgLabel.setStyleName("errorMessage");
+    errorMsgLabel.setVisible(false);
+
+    mainPanel.add(errorMsgLabel);
     mainPanel.add(stocksFlexTable);
     mainPanel.add(addPanel);
     mainPanel.add(lastUpdatedLabel);
@@ -163,8 +175,21 @@ public class StockWatcher implements EntryPoint {
   
     url = URL.encode(url);
   
-    // TODO Send request to server and handle errors.
-  
+    // Send request to server and catch any errors. 
+    RequestBuilder builder = new RequestBuilder(RequestBuilder.GET, url);
+
+    try { 
+      Request request = builder.sendRequest(null, new RequestCallback() { 
+        public void onError(Request request, Throwable exception) { displayError("Couldn't retrieve JSON");}
+        public void onResponseReceived(Request request, Response response) {
+          if (200 == response.getStatusCode()) {
+            updateTable(JsonUtils.<JsArray<StockData>>safeEval(response.getText()));
+          } else {
+            displayError("Couldn't retrieve JSON (" + response.getStatusText()
+                + ")");
+          }
+        }
+      }); } catch (RequestException e) { displayError("Couldn’t retrieve JSON"); }
   }
 
   /**
@@ -172,9 +197,9 @@ public class StockWatcher implements EntryPoint {
    *
    * @param prices Stock data for all rows.
    */
-  private void updateTable(StockPrice[] prices) {
-    for (int i = 0; i < prices.length; i++) {
-      updateTable(prices[i]);
+  private void updateTable(JsArray<StockData> prices) {
+    for (int i = 0; i < prices.length(); i++) {
+      updateTable(prices.get(i));
     }
 
     // Display timestamp showing last refresh.
@@ -182,6 +207,9 @@ public class StockWatcher implements EntryPoint {
       DateTimeFormat.PredefinedFormat.DATE_TIME_MEDIUM);
     lastUpdatedLabel.setText("Last update : " 
       + dateFormat.format(new Date()));
+
+    // Clear any errors.
+    errorMsgLabel.setVisible(false);
   }
 
     /**
@@ -189,7 +217,7 @@ public class StockWatcher implements EntryPoint {
    *
    * @param price Stock data for a single row.
    */
-  private void updateTable(StockPrice price) {
+  private void updateTable(StockData price) {
     // Make sure the stock is still in the stock table.
     if (!stocks.contains(price.getSymbol())) {
       return;
@@ -219,5 +247,14 @@ public class StockWatcher implements EntryPoint {
     }
 
     changeWidget.setStyleName(changeStyleName);
+  }
+
+    /**
+   * If can't get JSON, display error message.
+   * @param error
+   */
+  private void displayError(String error) {
+    errorMsgLabel.setText("Error: " + error);
+    errorMsgLabel.setVisible(true);
   }
 }
