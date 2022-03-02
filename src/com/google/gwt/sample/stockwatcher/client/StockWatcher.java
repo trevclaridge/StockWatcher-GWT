@@ -16,9 +16,11 @@ import com.google.gwt.event.dom.client.KeyDownHandler;
 import com.google.gwt.http.client.URL;
 import com.google.gwt.i18n.client.DateTimeFormat;
 import com.google.gwt.i18n.client.NumberFormat;
+import com.google.gwt.jsonp.client.JsonpRequestBuilder;
 import com.google.gwt.user.client.Random;
 import com.google.gwt.user.client.Timer;
 import com.google.gwt.user.client.Window;
+import com.google.gwt.user.client.rpc.AsyncCallback;
 import com.google.gwt.user.client.ui.Button;
 import com.google.gwt.user.client.ui.FlexTable;
 import com.google.gwt.user.client.ui.HorizontalPanel;
@@ -174,22 +176,21 @@ public class StockWatcher implements EntryPoint {
     }
   
     url = URL.encode(url);
-  
-    // Send request to server and catch any errors. 
-    RequestBuilder builder = new RequestBuilder(RequestBuilder.GET, url);
-
-    try { 
-      Request request = builder.sendRequest(null, new RequestCallback() { 
-        public void onError(Request request, Throwable exception) { displayError("Couldn't retrieve JSON");}
-        public void onResponseReceived(Request request, Response response) {
-          if (200 == response.getStatusCode()) {
-            updateTable(JsonUtils.<JsArray<StockData>>safeEval(response.getText()));
-          } else {
-            displayError("Couldn't retrieve JSON (" + response.getStatusText()
-                + ")");
-          }
+    
+    JsonpRequestBuilder builder = new JsonpRequestBuilder();
+    builder.requestObject(url, new AsyncCallback<JsArray<StockData>>() {
+      public void onFailure(Throwable caught) {
+        displayError("Couldn't retrieve JSON");
+      }
+      public void onSuccess(JsArray<StockData> data) {
+        if (data == null) {
+          displayError("Couldn't retrieve JSON");
+          return;
         }
-      }); } catch (RequestException e) { displayError("Couldn’t retrieve JSON"); }
+        
+        updateTable(data);
+      }
+    });
   }
 
   /**
